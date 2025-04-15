@@ -1,104 +1,102 @@
+#!/usr/bin/env python3
+import logging
+import os
+import sys
 from logging import (
-    FileHandler,
-    StreamHandler,
     INFO,
+    getLogger,
     basicConfig,
     error as log_error,
-    info as log_info,
 )
-from os import path as ospath, environ, remove
-from subprocess import run as srun, call as scall
+import subprocess
 from importlib.metadata import distributions
 from requests import get as rget
 from dotenv import load_dotenv, dotenv_values
 from pymongo import MongoClient
 
-if ospath.exists("log.txt"):
-    with open("log.txt", "r+") as f:
-        f.truncate(0)
-
-if ospath.exists("rlog.txt"):
-    remove("rlog.txt")
-
 basicConfig(
-    format="[%(asctime)s] [%(levelname)s] - %(message)s",
-    datefmt="%d-%b-%y %I:%M:%S %p",
-    handlers=[FileHandler("log.txt"), StreamHandler()],
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    handlers=[logging.FileHandler("log.txt"), logging.StreamHandler()],
     level=INFO,
 )
 
-load_dotenv("config.env", override=True)
+def getConfig(name: str):
+    return os.environ.get(name, None)
 
+def install_requirements():
+    for line in open('requirements.txt'):
+        try:
+            package = line.strip()
+            if not len(package) or package.startswith('#'):
+                continue
+            if subprocess.check_call([sys.executable, "-m", "pip", "install", package]) != 0:
+                print(f"Error installing {package}")
+        except Exception as e:
+            print(f"Failed to install {package}: {e}")
+
+def is_heroku():
+    return 'DYNO' in os.environ
+
+if os.path.exists('log.txt'):
+    with open('log.txt', 'r+') as f:
+        f.truncate(0)
+
+if os.path.exists('.git'):
+    try:
+        subprocess.check_call(
+            ['git', 'pull'],
+            stderr=subprocess.STDOUT,
+            stdout=subprocess.DEVNULL
+        )
+    except Exception as e:
+        log_error(f"Git pull error: {e}")
+
+UPSTREAM_REPO = getConfig('UPSTREAM_REPO')
+UPSTREAM_BRANCH = getConfig('UPSTREAM_BRANCH')
+
+if UPSTREAM_REPO:
+    if os.path.exists('.git'):
+        subprocess.run(['rm', '-rf', '.git'])
+
+    subprocess.run([
+        'git', 'init'
+    ])
+    subprocess.run([
+        'git', 'remote', 'add', 'origin', UPSTREAM_REPO
+    ])
+    subprocess.run([
+        'git', 'fetch', 'origin', UPSTREAM_BRANCH
+    ])
+    subprocess.run([
+        'git', 'checkout', '-f', f'origin/{UPSTREAM_BRANCH}'
+    ])
+
+# Install mega.py specifically for better Mega support
 try:
-    if bool(environ.get("_____REMOVE_THIS_LINE_____")):
-        log_error("The README.md file there to be read! Exiting now!")
-        exit()
-except Exception:
-    pass
+    import mega
+    print("mega.py is already installed")
+except ImportError:
+    print("Installing mega.py...")
+    subprocess.call([sys.executable, "-m", "pip", "install", "mega.py>=1.0.8"])
 
-BOT_TOKEN = environ.get("BOT_TOKEN", "")
-if len(BOT_TOKEN) == 0:
-    log_error("BOT_TOKEN variable is missing! Exiting now")
+# Check environment and install requirements
+try:
+    # Run the system check script 
+    if os.path.exists('system_check.py'):
+        subprocess.call([sys.executable, 'system_check.py'])
+    
+    # Ensure config file exists for Heroku
+    config_file = os.path.exists('config.env')
+    sample_config = os.path.exists('config_sample.env')
+    
+    if not config_file and sample_config:
+        print("Creating config.env from sample...")
+        with open('config_sample.env', 'r') as sample:
+            with open('config.env', 'w') as config:
+                config.write(sample.read())
+    
+    print("Ready to start the bot!")
+
+except Exception as e:
+    log_error(f"Something went wrong! Retry or ask support! Error: {e}")
     exit(1)
-
-bot_id = BOT_TOKEN.split(":", 1)[0]
-
-DATABASE_URL = environ.get("DATABASE_URL", "")
-if len(DATABASE_URL) == 0:
-    DATABASE_URL = None
-
-if DATABASE_URL is not None:
-    conn = MongoClient(DATABASE_URL)
-    db = conn.wzmlx
-    old_config = db.settings.deployConfig.find_one({"_id": bot_id})
-    config_dict = db.settings.config.find_one({"_id": bot_id})
-    if old_config is not None:
-        del old_config["_id"]
-    if (
-        old_config is not None
-        and old_config == dict(dotenv_values("config.env"))
-        or old_config is None
-    ) and config_dict is not None:
-        environ["UPSTREAM_REPO"] = config_dict["UPSTREAM_REPO"]
-        environ["UPSTREAM_BRANCH"] = config_dict["UPSTREAM_BRANCH"]
-        environ["UPGRADE_PACKAGES"] = config_dict.get("UPDATE_PACKAGES", "False")
-    conn.close()
-
-UPGRADE_PACKAGES = environ.get("UPGRADE_PACKAGES", "False")
-if UPGRADE_PACKAGES.lower() == "true":
-    packages = [dist.metadata["Name"] for dist in distributions()]
-    scall("uv pip install --system " + " ".join(packages), shell=True)
-
-UPSTREAM_REPO = environ.get("UPSTREAM_REPO", "")
-if len(UPSTREAM_REPO) == 0:
-    UPSTREAM_REPO = None
-
-UPSTREAM_BRANCH = environ.get("UPSTREAM_BRANCH", "")
-if len(UPSTREAM_BRANCH) == 0:
-    UPSTREAM_BRANCH = "master"
-
-if UPSTREAM_REPO is not None:
-    if ospath.exists(".git"):
-        srun(["rm", "-rf", ".git"])
-
-    update = srun(
-        [
-            f"git init -q \
-                     && git config --global user.email doc.adhikari@gmail.com \
-                     && git config --global user.name weebzone \
-                     && git add . \
-                     && git commit -sm update -q \
-                     && git remote add origin {UPSTREAM_REPO} \
-                     && git fetch origin -q \
-                     && git reset --hard origin/{UPSTREAM_BRANCH} -q"
-        ],
-        shell=True,
-    )
-
-    repo = UPSTREAM_REPO.split("/")
-    UPSTREAM_REPO = f"https://github.com/{repo[-2]}/{repo[-1]}"
-    if update.returncode == 0:
-        log_info("Successfully updated with latest commits !!")
-    else:
-        log_error("Something went Wrong ! Retry or Ask Support !")
-    log_info(f"UPSTREAM_REPO: {UPSTREAM_REPO} | UPSTREAM_BRANCH: {UPSTREAM_BRANCH}")
