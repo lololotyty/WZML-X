@@ -1,0 +1,61 @@
+{
+  "name": "WZML-X Mirror Bot",
+  "description": "A Telegram Mirror-Leech Bot with Mega support",
+  "logo": "https://telegra.ph/file/7de592b1488bcba8bbcec.jpg",
+  "keywords": ["telegram", "mirror", "leech", "mega"],
+  "repository": "https://github.com/weebzone/WZML-X",
+  "success_url": "https://github.com/weebzone/WZML-X",
+  "website": "https://github.com/weebzone/WZML-X",
+  "env": {
+    "BOT_TOKEN": {
+      "description": "The Telegram BOT Token (Get from @BotFather)",
+      "required": true
+    },
+    "OWNER_ID": {
+      "description": "Telegram User ID of the Owner",
+      "required": true
+    },
+    "TELEGRAM_API": {
+      "description": "Telegram API ID (Get from my.telegram.org)",
+      "required": true
+    },
+    "TELEGRAM_HASH": {
+      "description": "Telegram API HASH (Get from my.telegram.org)",
+      "required": true
+    },
+    "MEGA_EMAIL": {
+      "description": "Mega.nz Email (Optional for Premium Mega Account)",
+      "required": false
+    },
+    "MEGA_PASSWORD": {
+      "description": "Mega.nz Password (Optional for Premium Mega Account)",
+      "required": false
+    },
+    "DATABASE_URL": {
+      "description": "MongoDB Connection String (Optional)",
+      "required": false
+    },
+    "HEROKU_API_KEY": {
+      "description": "Heroku API key (Optional, but needed for dynos control)",
+      "required": false
+    },
+    "HEROKU_APP_NAME": {
+      "description": "Heroku App Name (Should be same as the one you entered above)",
+      "required": false
+    }
+  },
+  "buildpacks": [
+    {
+      "url": "heroku/python"
+    },
+    {
+      "url": "https://github.com/jonathanong/heroku-buildpack-ffmpeg-latest.git"
+    }
+  ],
+  "formation": {
+    "worker": {
+      "quantity": 1,
+      "size": "eco"
+    }
+  }
+} 
