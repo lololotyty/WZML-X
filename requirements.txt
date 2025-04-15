@@ -44,3 +44,4 @@ uvloop
 xattr
 yt-dlp[default,curl-cffi]
 pytz
+mega.py>=1.0.8
